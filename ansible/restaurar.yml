@@ -1,0 +1,70 @@
+- name: Restaurar backup MariaDB
+  hosts: local
+  become: no
+
+  vars_prompt:
+    - name: backup_name
+      prompt: "Nombre del backup a restaurar (ej: backup-20260427-201600.sql)"
+      private: no
+
+  vars:
+    backup_path: /home/usuario/mariadb-backups
+
+  tasks:
+
+    - name: Validar input del usuario
+      fail:
+        msg: "No has introducido un backup válido"
+      when: backup_name is not defined or backup_name == ""
+
+    - name: Comprobar que el backup existe en Minikube
+      shell: |
+        minikube ssh "test -f {{ backup_path }}/{{ backup_name }}"
+      register: check_backup
+      failed_when: check_backup.rc != 0
+      changed_when: false
+
+    - name: Eliminar pod de restauración si existe
+      shell: kubectl delete pod restore-mariadb --ignore-not-found
+      changed_when: false
+
+    - name: Crear pod de restauración
+      shell: |
+        kubectl run restore-mariadb \
+          --rm -i \
+          --image=mariadb:11.4 \
+          --restart=Never \
+          --overrides='
+        {
+          "apiVersion": "v1",
+          "spec": {
+            "containers": [{
+              "name": "restore",
+              "image": "mariadb:11.4",
+              "command": ["sh", "-c"],
+              "args": [
+                "mariadb -h mariadb-service -u root -p$MYSQL_ROOT_PASSWORD < /backup/{{ backup_name }}"
+              ],
+              "env": [{
+                "name": "MYSQL_ROOT_PASSWORD",
+                "valueFrom": {
+                  "secretKeyRef": {
+                    "name": "mariadb-secret",
+                    "key": "root-password"
+                  }
+                }
+              }],
+              "volumeMounts": [{
+                "name": "backup-volume",
+                "mountPath": "/backup"
+              }]
+            }],
+            "volumes": [{
+              "name": "backup-volume",
+              "hostPath": {
+                "path": "/home/usuario/mariadb-backups"
+              }
+            }],
+            "restartPolicy": "Never"
+          }
+        }'

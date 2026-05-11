@@ -1,0 +1,77 @@
+- name: Sistema de backups MariaDB (solo Minikube)
+  hosts: local
+  become: no
+
+  vars:
+    backup_namespace: default
+    backup_dir: /home/usuario/mariadb-backups
+
+  tasks:
+
+    - name: Desplegar CronJob de backups en Minikube
+      shell: |
+        kubectl apply -f - <<EOF
+        apiVersion: batch/v1
+        kind: CronJob
+
+        metadata:
+          name: mariadb-backup
+          namespace: {{ backup_namespace }}
+
+        spec:
+          schedule: "*/5 * * * *"
+
+          jobTemplate:
+            spec:
+              template:
+                spec:
+
+                  containers:
+                  - name: mariadb-backup
+                    image: mariadb:11.4
+
+                    command:
+                    - /bin/sh
+                    - -c
+                    - |
+                      set -e
+
+                      echo "Esperando MariaDB..."
+
+                      until mariadb-admin ping -h mariadb-service -u root -p\$MYSQL_ROOT_PASSWORD --silent; do
+                        sleep 2
+                      done
+
+                      echo "Creando backup..."
+
+                      mariadb-dump \
+                        -h mariadb-service \
+                        -u root \
+                        -p\$MYSQL_ROOT_PASSWORD \
+                        --all-databases \
+                        > /backup/backup-\$(date +\%Y\%m\%d-\%H\%M\%S).sql
+
+                      echo "Backup terminado"
+
+                    env:
+                    - name: MYSQL_ROOT_PASSWORD
+                      valueFrom:
+                        secretKeyRef:
+                          name: mariadb-secret
+                          key: root-password
+
+                    volumeMounts:
+                    - name: backup-volume
+                      mountPath: /backup
+
+                  restartPolicy: OnFailure
+
+                  volumes:
+                  - name: backup-volume
+                    hostPath:
+                      path: /home/usuario/mariadb-backups
+                      type: DirectoryOrCreate
+        EOF
+
+    - name: Mostrar CronJob
+      shell: kubectl get cronjob mariadb-backup

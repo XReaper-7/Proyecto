@@ -1,0 +1,20 @@
+- name: Iniciar Kubernetes con Minikube
+  hosts: local
+  become: no
+
+  tasks:
+    - name: Iniciar Minikube
+      shell: minikube start --driver=docker
+      args:
+        creates: /root/.minikube
+
+    - name: Esperar a que Kubernetes esté listo
+      shell: kubectl get nodes
+      register: result
+      retries: 10
+      delay: 5
+      until: result.rc == 0
+
+    - name: Mostrar nodos
+      debug:
+        var: result.stdout

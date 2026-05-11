@@ -1,0 +1,15 @@
+- name: Listar backups de MariaDB en Minikube
+  hosts: local
+  become: no
+
+  tasks:
+
+    - name: Obtener lista de backups desde el nodo Minikube
+      shell: |
+        minikube ssh "ls -lh /home/usuario/mariadb-backups"
+      register: backup_list
+      changed_when: false
+
+    - name: Mostrar backups encontrados
+      debug:
+        msg: "{{ backup_list.stdout_lines }}"
