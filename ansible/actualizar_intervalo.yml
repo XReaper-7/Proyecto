@@ -1,0 +1,17 @@
+- name: Configurar intervalo de backups MariaDB
+  hosts: local
+  become: no
+
+  vars:
+    interval: ""
+
+  tasks:
+
+    - name: Validar intervalo
+      fail:
+        msg: "Debes indicar intervalo (ej: */5 * * * *)"
+      when: interval == ""
+
+    - name: Actualizar cron de backups
+      shell: |
+        (crontab -l 2>/dev/null | grep -v backup-mariadb; echo "{{ interval }} /home/usuario/scripts/backup.sh") | crontab -

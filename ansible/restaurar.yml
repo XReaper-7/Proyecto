@@ -2,19 +2,15 @@
   hosts: local
   become: no
 
-  vars_prompt:
-    - name: backup_name
-      prompt: "Nombre del backup a restaurar (ej: backup-20260427-201600.sql)"
-      private: no
-
   vars:
+    backup_name: ""
     backup_path: /home/usuario/mariadb-backups
 
   tasks:
 
-    - name: Validar input del usuario
+    - name: Validar input del backup
       fail:
-        msg: "No has introducido un backup válido"
+        msg: "No se ha especificado backup_name"
       when: backup_name is not defined or backup_name == ""
 
     - name: Comprobar que el backup existe en Minikube
@@ -28,7 +24,7 @@
       shell: kubectl delete pod restore-mariadb --ignore-not-found
       changed_when: false
 
-    - name: Crear pod de restauración
+    - name: Restaurar backup en MariaDB
       shell: |
         kubectl run restore-mariadb \
           --rm -i \

@@ -1,122 +1,492 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { useEffect, useState } from "react";
+import axios from "axios";
 
-function App() {
-  const [count, setCount] = useState(0)
+export default function App() {
+
+  const [servers, setServers] = useState([]);
+  const [backups, setBackups] = useState([]);
+  const [selectedServer, setSelectedServer] = useState(null);
+  const [currentView, setCurrentView] = useState("servers");
+  const [loading, setLoading] = useState(false);
+  const [intervalBackup, setIntervalBackup] = useState("*/5 * * * *");
+
+  useEffect(() => {
+
+    axios
+      .get("http://localhost:3001/api/servers")
+      .then((response) => {
+
+        setServers(response.data.servers);
+
+      })
+      .catch((error) => {
+
+        console.error(error);
+
+      });
+
+  }, []);
+
+  /*
+  |--------------------------------------------------------------------------
+  | BACKUPS
+  |--------------------------------------------------------------------------
+  */
+
+useEffect(() => {
+
+  axios
+    .get("http://localhost:3001/api/backups")
+    .then((response) => {
+
+      setBackups(response.data.backups);
+
+    })
+    .catch((error) => {
+
+      console.error(error);
+
+    });
+
+}, []);
+
+
+const deleteBackup = async (backupName) => {
+  if (!backupName) {
+    alert("Backup no válido");
+    return;
+  }
+  
+    const confirmDelete = window.confirm(
+    `⚠️ ATENCIÓN\n\nVas a eliminar el backup:\n${backupName}\n\n¿Quieres continuar?`
+  );
+  
+  if (!confirmDelete) return;
+ 
+  try {
+    await axios.post("http://localhost:3001/api/delete-backup", {
+      backup: backupName
+    });
+
+    alert("Backup eliminado");
+
+    setBackups(prev =>
+      prev.filter(b => b.name !== backupName)
+    );
+
+  } catch (err) {
+    console.error(err);
+    alert("Error eliminando backup");
+  }
+};
+
+const Restore = async (backupName) => {
+  if (!backupName) {
+    alert("Backup no válido");
+    return;
+  }
+
+  const confirmRestore = window.confirm(
+    `⚠️ ATENCIÓN\n\nVas a restaurar el backup:\n${backupName}\n\nEsto sobrescribirá la base de datos.\n\n¿Quieres continuar?`
+  );
+
+  if (!confirmRestore) return;
+
+  try {
+
+    console.log("Restaurando:", backupName);
+
+    const res = await axios.post("http://localhost:3001/api/restore", {
+      backup: backupName
+    });
+
+    console.log("RESPUESTA:", res.data);
+
+    alert("Restauración completada correctamente");
+
+  } catch (err) {
+    console.error("ERROR RESTORE:", err.response?.data || err.message);
+    alert("Error restaurando backup");
+
+  } finally {
+    setLoading(false);
+  }
+};
+
+const handleSaveInterval = async () => {
+  try {
+    const res = await axios.post("http://localhost:3001/api/set-backup-interval", {
+      interval: intervalBackup
+    });
+
+    console.log("Respuesta backend:", res.data);
+    alert("Intervalo actualizado correctamente");
+
+  } catch (err) {
+    console.error("Error guardando intervalo:", err);
+    alert("Error al actualizar el intervalo");
+  }
+};
+
+if (currentView === "backups") {
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
+
+    <div className="min-h-screen bg-gray-200 p-8">
+
+      <div className="max-w-6xl mx-auto">
+
         <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
+          onClick={() => setCurrentView("server")}
+          className="mb-6 bg-gray-300 text-black hover:bg-gray-400 px-4 py-2 rounded-xl"
         >
-          Count is {count}
+          ← Volver
         </button>
-      </section>
 
-      <div className="ticks"></div>
+        <div className="bg-white border border-gray-300 rounded-3xl shadow-lg p-8 mb-8">
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
+          <h1 className="text-4xl font-bold text-black mb-2">
+            Backups
+          </h1>
+
+          <p className="text-gray-700">
+            {selectedServer.name}
+          </p>
+
         </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+        <div className="bg-white border border-gray-300 rounded-3xl shadow-lg p-8">
+
+          <div className="space-y-4">
+
+            <div className="border rounded-2xl p-4 flex justify-between items-center">
+
+             <div className="space-y-4">
+
+  {backups.map((backup, index) => (
+
+    <div
+      key={index}
+      className="border rounded-2xl p-4 flex justify-between items-center"
+    >
+
+      <div>
+
+        <h2 className="font-bold">
+          {backup.name}
+        </h2>
+
+      </div>
+
+      <div className="flex gap-3">
+
+        <button onClick={() => Restore(backup.name)} className="bg-blue-600 text-white px-4 py-2 rounded-xl">
+		  Restaurar
+	</button>
+
+        <button onClick={() => deleteBackup(backup.name)} className="bg-red-600 text-white px-4 py-2 rounded-xl">
+		  Eliminar
+	</button>
+
+      </div>
+
+    </div>
+
+  ))}
+
+</div>
+
+              <div className="flex gap-3">
+
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+  );
 }
 
-export default App
+if (currentView === "configuracion") {
+
+  return (
+
+    <div className="min-h-screen bg-gray-200 p-8">
+
+      <div className="max-w-6xl mx-auto">
+
+        <button
+          onClick={() => setCurrentView("server")}
+          className="mb-6 bg-gray-300 text-black hover:bg-gray-400 px-4 py-2 rounded-xl"
+        >
+          ← Volver
+        </button>
+
+        <div className="bg-white border border-gray-300 rounded-3xl shadow-lg p-8 mb-8">
+
+          <h1 className="text-4xl font-bold text-black mb-2">
+            Configuración
+          </h1>
+
+          <p className="text-gray-700">
+            {selectedServer.name}
+          </p>
+
+        </div>
+
+      </div>
+	<button onClick={() => setCurrentView("intervalos")} className="bg-white border border-gray-300 p-6 rounded-2xl shadow hover:scale-[1.02] transition text-left">
+	  <h2 className="text-2xl font-bold mb-2 text-black">
+	    Intervalos de backups
+	  </h2>
+
+	  <p className="text-gray-700">
+	    Cambiar frecuencia de backups automáticos
+	  </p>
+	</button>
+    </div>
+  );
+}
+
+if (currentView === "intervalos") {
+
+  return (
+
+    <div className="min-h-screen bg-gray-200 p-8">
+
+      <div className="max-w-6xl mx-auto">
+
+        <button
+          onClick={() => setCurrentView("configuracion")}
+          className="mb-6 bg-gray-300 text-black hover:bg-gray-400 px-4 py-2 rounded-xl"
+        >
+          ← Volver
+        </button>
+
+        <div className="bg-white border border-gray-300 rounded-3xl shadow-lg p-8 mb-8">
+
+          <h1 className="text-4xl font-bold text-black mb-4">
+            Intervalos de backups
+          </h1>
+
+          <p className="text-gray-700 mb-6">
+            Selecciona cada cuánto quieres ejecutar los backups automáticos
+          </p>
+
+          <select
+            onChange={(e) => setIntervalBackup(e.target.value)}
+            className="border border-gray-300 p-3 rounded-xl w-full"
+          >
+            <option value="*/5 * * * *">Cada 5 minutos</option>
+            <option value="*/10 * * * *">Cada 10 minutos</option>
+            <option value="0 * * * *">Cada hora</option>
+            <option value="0 0 * * *">Cada día</option>
+          </select>
+
+          <button
+            onClick={handleSaveInterval}
+            className="mt-6 bg-green-600 text-white px-4 py-2 rounded-xl hover:bg-green-700"
+          >
+            Guardar intervalo
+          </button>
+
+        </div>
+
+      </div>
+
+    </div>
+
+  );
+}
+  /*
+  |--------------------------------------------------------------------------
+  | PANEL SERVIDOR
+  |--------------------------------------------------------------------------
+  */
+
+  if (selectedServer) {
+
+    return (
+
+      <div className="min-h-screen bg-gray-200 p-8">
+
+        <div className="max-w-6xl mx-auto">
+
+          <div className="bg-white border border-gray-300 rounded-3xl shadow-lg p-8 mb-8">
+
+            <button
+              onClick={() => setSelectedServer(null)}
+              className="mb-6 bg-gray-300 text-black hover:bg-gray-400 px-4 py-2 rounded-xl"
+            >
+              ← Volver
+            </button>
+
+            <div className="flex items-center justify-between">
+
+              <div>
+
+                <h1 className="text-4xl font-bold text-black mb-2">
+                  {selectedServer.name}
+                </h1>
+
+                <p className="text-gray-700">
+                  Servidor administrado con Ansible
+                </p>
+
+              </div>
+
+              <div className="flex items-center gap-3">
+
+                <div className="w-4 h-4 bg-green-500 rounded-full"></div>
+
+                <span className="font-semibold">
+                  ONLINE
+                </span>
+
+              </div>
+
+            </div>
+
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+
+           <button onClick={() => setCurrentView("backups")} className="bg-white border border-gray-300 p-8 rounded-3xl shadow-lg text-left hover:scale-[1.02] transition">
+
+              <h2 className="text-2xl font-bold mb-3">
+                Backups
+              </h2>
+
+              <p className="text-gray-700">
+                Ver backups y restaurar bases de datos
+              </p>
+
+            </button>
+
+            <button onClick={() => setCurrentView("configuracion")} className="bg-white border border-gray-300 p-8 rounded-3xl shadow-lg text-left hover:scale-[1.02] transition">
+
+              <h2 className="text-2xl font-bold mb-3">
+                Configuración
+              </h2>
+
+              <p className="text-gray-700">
+                Intervalos, Restaurar Servidor
+              </p>
+
+            </button>
+
+            <button className="bg-white border border-gray-300 p-8 rounded-3xl shadow-lg text-left hover:scale-[1.02] transition">
+
+              <h2 className="text-2xl font-bold mb-3">
+                Estado
+              </h2>
+
+              <p className="text-gray-700">
+                Recursos y estado del servidor
+              </p>
+
+            </button>
+
+            <button className="bg-white border border-gray-300 p-8 rounded-3xl shadow-lg text-left hover:scale-[1.02] transition">
+
+              <h2 className="text-2xl font-bold mb-3">
+                Logs
+              </h2>
+
+              <p className="text-gray-700">
+                Ver logs del sistema
+              </p>
+
+            </button>
+
+            <button className="bg-white border border-gray-300 p-8 rounded-3xl shadow-lg text-left hover:scale-[1.02] transition">
+
+              <h2 className="text-2xl font-bold mb-3">
+                Servicios
+              </h2>
+
+              <p className="text-gray-700">
+                Estado de MariaDB y servicios
+              </p>
+
+            </button>
+
+          </div>
+
+        </div>
+
+      </div>
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | LISTA SERVIDORES
+  |--------------------------------------------------------------------------
+  */
+
+  return (
+
+    <div className="min-h-screen bg-gray-200 p-8 text-gray-900">
+
+      <div className="max-w-6xl mx-auto">
+
+        <div className="bg-white border border-gray-300 rounded-3xl shadow-lg p-8 mb-8">
+
+          <h1 className="text-4xl font-bold text-black mb-3">
+            Infraestructura
+          </h1>
+
+          <p className="text-gray-800">
+            Selecciona un servidor
+          </p>
+
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+          {servers.map((server, index) => (
+
+            <div
+              key={index}
+              onClick={() => {
+ 		 setSelectedServer(server);
+ 		 setCurrentView("server");
+		}}
+              className="bg-white border border-gray-300 rounded-3xl shadow-lg p-8 cursor-pointer hover:scale-[1.02] transition"
+            >
+
+              <div className="flex items-center justify-between">
+
+                <div>
+
+                  <h2 className="text-2xl font-bold mb-2">
+                    {server.name}
+                  </h2>
+
+                  <p className="text-gray-700">
+                    Servidor gestionado por Ansible
+                  </p>
+
+                </div>
+
+                <div className="w-4 h-4 bg-green-500 rounded-full"></div>
+
+              </div>
+
+            </div>
+
+          ))}
+
+        </div>
+
+      </div>
+
+    </div>
+  );
+}

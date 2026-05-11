@@ -1,0 +1,30 @@
+- name: Eliminar backup MariaDB
+  hosts: local
+  become: no
+
+  vars:
+    backup_name: ""
+    backup_path: /home/usuario/mariadb-backups
+
+  tasks:
+
+    - name: Validar backup_name
+      fail:
+        msg: "No se ha especificado backup_name"
+      when: backup_name is not defined or backup_name == ""
+
+    - name: Comprobar que el backup existe en Minikube
+      shell: |
+        minikube ssh "test -f {{ backup_path }}/{{ backup_name }}"
+      register: check_file
+      failed_when: check_file.rc != 0
+      changed_when: false
+
+    - name: Eliminar backup en Minikube
+      shell: |
+        minikube ssh "sudo rm -f {{ backup_path }}/{{ backup_name }}"
+      register: delete_result
+
+    - name: Confirmación
+      debug:
+        msg: "Backup eliminado correctamente"
