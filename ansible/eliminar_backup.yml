@@ -1,5 +1,5 @@
 - name: Eliminar backup MariaDB
-  hosts: local
+  hosts: servidores
   become: no
 
   vars:

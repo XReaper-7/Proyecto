@@ -1,5 +1,5 @@
 - name: Listar backups de MariaDB en Minikube
-  hosts: local
+  hosts: servidores
   become: no
 
   tasks:

@@ -19,8 +19,10 @@ app.get("/", (req, res) => {
   
 app.get("/api/backups", (req, res) => {
 
+  const server = req.query.server;
+
   exec(
-    "ANSIBLE_FORCE_COLOR=false ansible-playbook -i ../ansible/hosts ../ansible/lista_backups.yml",
+    `ANSIBLE_FORCE_COLOR=false ansible-playbook -i ../ansible/hosts ../ansible/lista_backups.yml --limit ${server}`,
     (error, stdout, stderr) => {
 
       if (error) {
@@ -58,6 +60,7 @@ app.get("/api/backups", (req, res) => {
 app.post("/api/restore", express.json(), (req, res) => {
 
   const backup = req.body.backup;
+  const server = req.query.server;
 
   if (!backup) {
     return res.status(400).json({
@@ -70,7 +73,7 @@ app.post("/api/restore", express.json(), (req, res) => {
 ANSIBLE_FORCE_COLOR=false \
 ansible-playbook \
 -i ../ansible/hosts ../ansible/restaurar.yml \
---extra-vars "backup_name=${backup}"
+--extra-vars "backup_name=${backup}" --limit ${server}
 `;
 
   exec(cmd, (error, stdout, stderr) => {
@@ -101,6 +104,7 @@ ansible-playbook \
 app.post("/api/delete-backup", express.json(), (req, res) => {
 
   const backup = req.body.backup;
+  const server = req.query.server;
 
   if (!backup) {
     return res.status(400).json({
@@ -113,7 +117,7 @@ app.post("/api/delete-backup", express.json(), (req, res) => {
 ANSIBLE_FORCE_COLOR=false \
 ansible-playbook \
 -i ../ansible/hosts ../ansible/eliminar_backup.yml \
---extra-vars "backup_name=${backup}"
+--extra-vars "backup_name=${backup}" --limit ${server}
 `;
 
   exec(cmd, (error, stdout, stderr) => {
@@ -144,10 +148,11 @@ ansible-playbook \
 app.post("/api/set-backup-interval", express.json(), (req, res) => {
 
   const interval = req.body.interval;
+  const server = req.query.server;
 
   const cmd = `
 ansible-playbook -i ../ansible/hosts ../ansible/actualizar_intervalo.yml \
---extra-vars "interval='${interval}'"
+--extra-vars "interval='${interval}'" --limit ${server} 
 `;
 
   exec(cmd, (err, stdout, stderr) => {
@@ -216,6 +221,62 @@ app.get("/api/servers", (req, res) => {
 
     }
   );
+});
+
+  /*
+  |--------------------------------------------------------------------------
+  | INSTALAR SERVIDOR
+  |--------------------------------------------------------------------------
+  */
+
+app.post("/api/install", (req, res) => {
+
+  const server = req.query.server;
+
+  exec(`
+    ansible-playbook -i ../ansible/hosts \
+    ../ansible/install.yml --limit ${server}
+  `,
+
+  (error, stdout, stderr) => {
+
+    if (error) {
+      return res.status(500).json({
+        error: stderr
+      });
+    }
+
+    res.json({
+      output: stdout
+    });
+
+  });
+
+});
+
+app.post("/api/delete", (req, res) => {
+
+  const server = req.query.server;
+
+  exec(`
+    ansible-playbook -i ../ansible/hosts \
+    ../ansible/delete.yml --limit ${server}
+  `,
+
+  (error, stdout, stderr) => {
+
+    if (error) {
+      return res.status(500).json({
+        error: stderr
+      });
+    }
+
+    res.json({
+      output: stdout
+    });
+
+  });
+
 });
 
 app.listen(3001, () => {

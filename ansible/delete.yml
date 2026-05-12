@@ -1,0 +1,36 @@
+---
+- name: Eliminar cluster Minikube y limpiar entorno
+  hosts: servidor1
+  become: no
+  gather_facts: yes
+
+  tasks:
+
+    # =========================================================
+    # PARAR Y BORRAR CLUSTER MINIKUBE
+    # =========================================================
+    - name: Parar y eliminar cluster Minikube
+      shell: minikube delete
+      ignore_errors: yes
+
+    # =========================================================
+    # BORRAR DIRECTORIOS DE MINIKUBE
+    # =========================================================
+    - name: Borrar carpeta .minikube del usuario
+      file:
+        path: "{{ ansible_env.HOME }}/.minikube"
+        state: absent
+
+    - name: Borrar kubeconfig del usuario
+      file:
+        path: "{{ ansible_env.HOME }}/.kube"
+        state: absent
+
+    # =========================================================
+    # OPCIONAL: eliminar configuración kubectl global
+    # =========================================================
+    - name: Borrar configuración kubectl (si existe)
+      file:
+        path: /root/.kube
+        state: absent
+      ignore_errors: yes

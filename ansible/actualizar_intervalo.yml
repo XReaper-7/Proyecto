@@ -1,5 +1,5 @@
 - name: Configurar intervalo de backups MariaDB
-  hosts: local
+  hosts: servidores
   become: no
 
   vars:

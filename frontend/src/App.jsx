@@ -35,8 +35,10 @@ export default function App() {
 
 useEffect(() => {
 
+  if (!selectedServer) return;
+
   axios
-    .get("http://localhost:3001/api/backups")
+    .get(`http://localhost:3001/api/backups?server=${selectedServer.name}`)
     .then((response) => {
 
       setBackups(response.data.backups);
@@ -48,7 +50,7 @@ useEffect(() => {
 
     });
 
-}, []);
+}, [selectedServer]);
 
 
 const deleteBackup = async (backupName) => {
@@ -64,7 +66,7 @@ const deleteBackup = async (backupName) => {
   if (!confirmDelete) return;
  
   try {
-    await axios.post("http://localhost:3001/api/delete-backup", {
+    await axios.post(`http://localhost:3001/api/delete-backup?server=${selectedServer.name}`, {
       backup: backupName
     });
 
@@ -96,7 +98,7 @@ const Restore = async (backupName) => {
 
     console.log("Restaurando:", backupName);
 
-    const res = await axios.post("http://localhost:3001/api/restore", {
+    const res = await axios.post(`http://localhost:3001/api/restore?server=${selectedServer.name}`, {
       backup: backupName
     });
 
@@ -115,7 +117,7 @@ const Restore = async (backupName) => {
 
 const handleSaveInterval = async () => {
   try {
-    const res = await axios.post("http://localhost:3001/api/set-backup-interval", {
+    const res = await axios.post(`http://localhost:3001/api/set-backup-interval?server=${selectedServer.name}`, {
       interval: intervalBackup
     });
 
@@ -127,6 +129,74 @@ const handleSaveInterval = async () => {
     alert("Error al actualizar el intervalo");
   }
 };
+
+  /*
+  |--------------------------------------------------------------------------
+  | INSTALACION
+  |--------------------------------------------------------------------------
+  */
+  
+const handleInstall = async () => {
+
+  const confirmInstall = window.confirm(
+    `Instalar archivos y dependencias en ${selectedServer.name}?`
+  );
+
+  if (!confirmInstall) return;
+
+  try {
+
+    const res = await axios.post(
+      `http://localhost:3001/api/install?server=${selectedServer.name}`
+    );
+
+    console.log(res.data);
+
+    alert("Instalación completada, la contraseña por defecto es: 1234");
+
+  } catch (err) {
+
+    console.error(err);
+
+    alert("Error instalando");
+
+  }
+
+};
+
+const handleDelete = async () => {
+
+  const confirmInstall = window.confirm(
+    `Advertencia, esto eliminara los archivos de la base de datos de ${selectedServer.name}?`
+  );
+
+  if (!confirmInstall) return;
+
+  try {
+
+    const res = await axios.post(
+      `http://localhost:3001/api/delete?server=${selectedServer.name}`
+    );
+
+    console.log(res.data);
+
+    alert("Se han eliminado correctamente los datos del servidor");
+
+  } catch (err) {
+
+    console.error(err);
+
+    alert("Error eliminando");
+
+  }
+
+};
+
+  /*
+  |--------------------------------------------------------------------------
+  | VISTAS
+  |--------------------------------------------------------------------------
+  */
 
 if (currentView === "backups") {
 
@@ -239,16 +309,41 @@ if (currentView === "configuracion") {
 
         </div>
 
-      </div>
-	<button onClick={() => setCurrentView("intervalos")} className="bg-white border border-gray-300 p-6 rounded-2xl shadow hover:scale-[1.02] transition text-left">
-	  <h2 className="text-2xl font-bold mb-2 text-black">
-	    Intervalos de backups
-	  </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-	  <p className="text-gray-700">
-	    Cambiar frecuencia de backups automáticos
-	  </p>
-	</button>
+          <button
+            onClick={() => setCurrentView("intervalos")}
+            className="bg-white border border-gray-300 p-6 rounded-2xl shadow hover:scale-[1.02] transition text-left"
+          >
+
+            <h2 className="text-2xl font-bold mb-2 text-black">
+              Intervalos de backups
+            </h2>
+
+            <p className="text-gray-700">
+              Cambiar frecuencia de backups automáticos
+            </p>
+
+          </button>
+
+          <button
+            onClick={() => setCurrentView("install")}
+            className="bg-white border border-gray-300 p-6 rounded-2xl shadow hover:scale-[1.02] transition text-left">
+
+            <h2 className="text-2xl font-bold mb-2 text-black">
+              Instalación
+            </h2>
+
+            <p className="text-gray-700">
+              Instalar o borrar servidor
+            </p>
+
+          </button>
+
+        </div>
+
+      </div>
+
     </div>
   );
 }
@@ -303,6 +398,71 @@ if (currentView === "intervalos") {
 
   );
 }
+
+if (currentView === "install") {
+
+  return (
+
+    <div className="min-h-screen bg-gray-200 p-8">
+
+      <div className="max-w-6xl mx-auto">
+
+        <button
+          onClick={() => setCurrentView("configuracion")}
+          className="mb-6 bg-gray-300 text-black hover:bg-gray-400 px-4 py-2 rounded-xl"
+        >
+          ← Volver
+        </button>
+
+        <div className="bg-white border border-gray-300 rounded-3xl shadow-lg p-8 mb-8">
+
+          <h1 className="text-4xl font-bold text-black mb-2">
+            Instalación
+          </h1>
+
+          <p className="text-gray-700">
+            Gestionar servidor
+          </p>
+
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+          <button
+            className="bg-white border border-gray-300 p-6 rounded-2xl shadow hover:scale-[1.02] transition text-left" onClick={handleInstall}>
+
+            <h2 className="text-2xl font-bold mb-2 text-black">
+              Instalar servidor
+            </h2>
+
+            <p className="text-gray-700">
+              Instalar dependencias automáticamente
+            </p>
+
+          </button>
+
+          <button
+            className="bg-white border border-gray-300 p-6 rounded-2xl shadow hover:scale-[1.02] transition text-left" onClick={handleDelete}>
+
+            <h2 className="text-2xl font-bold mb-2 text-black">
+              Eliminar servidor
+            </h2>
+
+            <p className="text-gray-700">
+              Borrar servidor de la infraestructura
+            </p>
+
+          </button>
+
+        </div>
+
+      </div>
+
+    </div>
+
+  );
+}
+
   /*
   |--------------------------------------------------------------------------
   | PANEL SERVIDOR

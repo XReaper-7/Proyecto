@@ -2,9 +2,9 @@ all:
   children:
     servidores:
       hosts:
-        local:
-          ansible_connection: local
-          ansible_host: 127.0.0.1
+#        local:
+#          ansible_connection: local
+#          ansible_host: 127.0.0.1
 
         servidor1:
           ansible_host: 192.168.56.201
