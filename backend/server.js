@@ -173,6 +173,84 @@ ansible-playbook -i ../ansible/hosts ../ansible/actualizar_intervalo.yml \
 
   /*
   |--------------------------------------------------------------------------
+  | CREAR REPLICA
+  |--------------------------------------------------------------------------
+  */
+
+app.post("/api/replica", (req, res) => {
+
+  const server = req.query.server;
+  const target = req.body.target;
+
+  console.log("SOURCE:", server);
+  console.log("TARGET:", target);
+
+  const cmd = `
+ansible-playbook -i ../ansible/hosts ../ansible/replica.yml \
+--extra-vars '{"source":"${server}","target":"${target}"}'
+`;
+
+  console.log("CMD:", cmd);
+
+  exec(cmd, (error, stdout, stderr) => {
+
+    console.log("STDOUT:", stdout);
+    console.log("STDERR:", stderr);
+
+    if (error) {
+      console.log("ERROR:", error.message);
+
+      return res.status(500).json({
+        success: false,
+        error: stderr || error.message
+      });
+    }
+
+    res.json({
+      success: true,
+      output: stdout
+    });
+
+  });
+
+});
+
+  /*
+  |--------------------------------------------------------------------------
+  | BORRAR REPLICA
+  |--------------------------------------------------------------------------
+  */
+
+app.post("/api/replica-delete", (req, res) => {
+
+  const source = req.query.server;
+  const target = req.body.target;
+
+  const cmd = `
+ansible-playbook -i ../ansible/hosts ../ansible/replica_remove.yml \
+--extra-vars "source=${source} target=${target}"
+`;
+
+  exec(cmd, (error, stdout, stderr) => {
+
+    if (error) {
+      return res.status(500).json({
+        success: false,
+        error: stderr || error.message
+      });
+    }
+
+    res.json({
+      success: true,
+      output: stdout
+    });
+
+  });
+
+});
+
+  /*
+  |--------------------------------------------------------------------------
   | VER SERVERS
   |--------------------------------------------------------------------------
   */
@@ -184,10 +262,12 @@ app.get("/api/servers", (req, res) => {
     (error, stdout, stderr) => {
 
       if (error) {
+
         return res.status(500).json({
           success: false,
           error: error.message
         });
+
       }
 
       try {
@@ -200,7 +280,11 @@ app.get("/api/servers", (req, res) => {
         const servers = hosts.map((host) => {
 
           return {
-            name: host
+
+            name: host,
+
+            ip: inventory._meta.hostvars[host].ansible_host
+
           };
 
         });
@@ -221,6 +305,38 @@ app.get("/api/servers", (req, res) => {
 
     }
   );
+
+});
+
+  /*
+  |--------------------------------------------------------------------------
+  | EXPONER SERVIDOR
+  |--------------------------------------------------------------------------
+  */
+
+app.post("/api/exponer", (req, res) => {
+
+  const server = req.query.server;
+
+  exec(`
+    ansible-playbook -i ../ansible/hosts \
+    ../ansible/exponer.yml --limit ${server}
+  `,
+
+  (error, stdout, stderr) => {
+
+    if (error) {
+      return res.status(500).json({
+        error: stderr
+      });
+    }
+
+    res.json({
+      output: stdout
+    });
+
+  });
+
 });
 
   /*

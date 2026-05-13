@@ -19,7 +19,7 @@
       register: check_backup
       failed_when: check_backup.rc != 0
       changed_when: false
-
+    
     - name: Eliminar pod de restauración si existe
       shell: kubectl delete pod restore-mariadb --ignore-not-found
       changed_when: false

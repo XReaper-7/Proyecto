@@ -1,0 +1,26 @@
+---
+- name: Exponer MariaDB con port-forward
+  hosts: all
+  become: no
+
+  tasks:
+
+    - name: Matar port-forward anterior si existe
+      shell: |
+        pkill -f "kubectl port-forward svc/mariadb-service" || true
+      failed_when: false
+
+    - name: Lanzar port-forward de MariaDB
+      shell: |
+        nohup kubectl port-forward svc/mariadb-service 30306:3306 --address 0.0.0.0 > /tmp/mariadb-portforward.log 2>&1 &
+      environment:
+        KUBECONFIG: /home/usuario/.kube/config
+
+    - name: Esperar a que abra el puerto
+      wait_for:
+        port: 30306
+        timeout: 10
+
+    - name: Mostrar conexión
+      debug:
+        msg: "MariaDB expuesta en el puerto 30306"
