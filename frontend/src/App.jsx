@@ -9,8 +9,8 @@ export default function App() {
   const [currentView, setCurrentView] = useState("servers");
   const [loading, setLoading] = useState(false);
   const [intervalBackup, setIntervalBackup] = useState("*/5 * * * *");
-  const [replicaMode, setReplicaMode] = useState(false);
-  const [targetServer, setTargetServer] = useState(null);
+  const [serverStatus, setServerStatus] = useState(null);
+  const [logs, setLogs] = useState([]);
 
   useEffect(() => {
 
@@ -28,6 +28,16 @@ export default function App() {
       });
 
   }, []);
+  
+  useEffect(() => {
+  const interval = setInterval(() => {
+    if (currentView === "estado") {
+      getStatus();
+    }
+  }, 5000);
+
+  return () => clearInterval(interval);
+}, [currentView]);
 
   /*
   |--------------------------------------------------------------------------
@@ -222,68 +232,33 @@ const exponer = async () => {
 
 };
 
+
   /*
   |--------------------------------------------------------------------------
-  | CREAR REPLICA
+  | ESTADO
   |--------------------------------------------------------------------------
   */
 
-const createReplica = async (targetServer) => {
-  if (!targetServer) return;
-
-  const confirm = window.confirm(
-    `¿Crear réplica entre ${selectedServer.name} y ${targetServer.name}?`
+const getStatus = async () => {
+  const res = await axios.get(
+    `http://localhost:3001/api/status?server=${selectedServer.name}&ip=${selectedServer.ip}`
   );
 
-  if (!confirm) return;
-
-  try {
-    const res = await axios.post(
-      `http://localhost:3001/api/replica?server=${selectedServer.name}`,
-      {
-        target: targetServer.name
-      }
-    );
-
-    console.log(res.data);
-    alert("Réplica creada correctamente");
-
-  } catch (err) {
-    console.error(err);
-    alert("Error creando réplica");
-  }
+  setServerStatus(res.data);
 };
 
   /*
   |--------------------------------------------------------------------------
-  | BORRAR REPLICA
+  | LOGS
   |--------------------------------------------------------------------------
   */
 
-const deleteReplica = async (targetServer) => {
-  if (!targetServer) return;
-
-  const confirm = window.confirm(
-    `¿Eliminar réplica entre ${selectedServer.name} y ${targetServer.name}?`
+const getLogs = async () => {
+  const res = await axios.get(
+    `http://localhost:3001/api/logs?server=${selectedServer.name}`
   );
 
-  if (!confirm) return;
-
-  try {
-    const res = await axios.post(
-      `http://localhost:3001/api/replica-delete?server=${selectedServer.name}`,
-      {
-        target: targetServer.name
-      }
-    );
-
-    console.log(res.data);
-    alert("Réplica eliminada correctamente");
-
-  } catch (err) {
-    console.error(err);
-    alert("Error eliminando réplica");
-  }
+  setLogs(res.data.logs);
 };
 
   /*
@@ -557,105 +532,46 @@ if (currentView === "install") {
   );
 }
 
-if (currentView === "replicas") {
+if (currentView === "estado") {
   return (
     <div className="min-h-screen bg-gray-200 p-8">
       <div className="max-w-6xl mx-auto">
 
         <button
           onClick={() => setCurrentView("server")}
-          className="mb-6 bg-gray-300 text-black hover:bg-gray-400 px-4 py-2 rounded-xl"
+          className="mb-6 bg-gray-300 px-4 py-2 rounded-xl"
         >
           ← Volver
         </button>
 
-        <div className="bg-white border border-gray-300 rounded-3xl shadow-lg p-8 mb-8">
-          <h1 className="text-4xl font-bold text-black mb-2">
-            Réplicas
+        <div className="bg-white p-8 rounded-3xl shadow-lg">
+
+          <h1 className="text-3xl font-bold mb-6">
+            Estado del servidor
           </h1>
 
-          <p className="text-gray-700">
-            {selectedServer.name}
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-          {/* CREAR REPLICA */}
           <button
-            onClick={() => setCurrentView("crearReplica")}
-            className="bg-white border border-gray-300 p-8 rounded-3xl shadow-lg text-left hover:scale-[1.02] transition"
-          >
-            <h2 className="text-2xl font-bold mb-3">
-              Crear réplica
-            </h2>
-
-            <p className="text-gray-700">
-              Configurar replicación entre servidores
-            </p>
+            onClick={getStatus}
+            className="bg-blue-600 text-white px-4 py-2 rounded-xl mb-6">
+            Actualizar estado
           </button>
 
-          {/* ELIMINAR REPLICA */}
-          <button
-            onClick={() => setCurrentView("eliminarReplica")}
-            className="bg-white border border-gray-300 p-8 rounded-3xl shadow-lg text-left hover:scale-[1.02] transition"
-          >
-            <h2 className="text-2xl font-bold mb-3">
-              Eliminar réplica
-            </h2>
+        {serverStatus && (
+  <div>
+    <p>Nombre: {selectedServer.name}</p>
+    <p>IP: {serverStatus.ip}</p>
 
-            <p className="text-gray-700">
-              Desactivar replicación existente
-            </p>
-          </button>
+    <p>
+      Online:{" "}
+      {serverStatus?.status?.online ? "🟢 SI" : "🔴 NO"}
+    </p>
 
-        </div>
-
-      </div>
-    </div>
-  );
-}
-
-if (currentView === "crearReplica") {
-  return (
-    <div className="min-h-screen bg-gray-200 p-8">
-      <div className="max-w-6xl mx-auto">
-
-        <button
-          onClick={() => setCurrentView("replicas")}
-          className="mb-6 bg-gray-300 text-black hover:bg-gray-400 px-4 py-2 rounded-xl"
-        >
-          ← Volver
-        </button>
-
-        <div className="bg-white border border-gray-300 rounded-3xl shadow-lg p-8">
-          <h1 className="text-3xl font-bold mb-4">
-            Crear réplica
-          </h1>
-
-          <p className="text-gray-700 mb-6">
-            Selecciona el servidor destino
-          </p>
-
-          <div className="space-y-3">
-            {servers
-              .filter(s => s.name !== selectedServer.name)
-              .map((server) => (
-                <div
-                  key={server.name}
-                  className="border p-4 rounded-xl flex justify-between items-center"
-                >
-                  <div>
-                    <p className="font-bold">{server.name}</p>
-                    <p className="text-gray-600">{server.ip}</p>
-                  </div>
-
-                     <button onClick={() => createReplica(server)} className="bg-green-600 text-white px-4 py-2 rounded-xl">
-                     Crear réplica
-                     </button>
-                </div>
-              ))}
-          </div>
+    <p>
+      Puerto 30306:{" "}
+      {serverStatus?.status?.port_30306 ? "🟢 ABIERTO" : "🔴 CERRADO"}
+    </p>
+  </div>
+)}
 
         </div>
       </div>
@@ -663,58 +579,60 @@ if (currentView === "crearReplica") {
   );
 }
 
-if (currentView === "eliminarReplica") {
+if (currentView === "logs") {
   return (
     <div className="min-h-screen bg-gray-200 p-8">
       <div className="max-w-6xl mx-auto">
 
         <button
-          onClick={() => setCurrentView("replicas")}
-          className="mb-6 bg-gray-300 text-black hover:bg-gray-400 px-4 py-2 rounded-xl"
+          onClick={() => setCurrentView("server")}
+          className="mb-6 bg-gray-300 px-4 py-2 rounded-xl"
         >
           ← Volver
         </button>
 
-        <div className="bg-white border border-gray-300 rounded-3xl shadow-lg p-8">
-          <h1 className="text-3xl font-bold mb-4">
-            Eliminar réplica
+        <div className="bg-white p-8 rounded-3xl shadow-lg">
+
+          <h1 className="text-3xl font-bold mb-6">
+            Logs del sistema
           </h1>
 
-          <p className="text-gray-700 mb-6">
-            Selecciona servidor a desconfigurar
-          </p>
+          <button
+            onClick={getLogs}
+            className="bg-blue-600 text-white px-4 py-2 rounded-xl mb-6"
+          >
+            Actualizar logs
+          </button>
 
-          <div className="space-y-3">
-            {servers
-              .filter(s => s.name !== selectedServer.name)
-              .map((server) => (
-                <div
-                  key={server.name}
-                  className="border p-4 rounded-xl flex justify-between items-center"
-                >
-                  <div>
-                    <p className="font-bold">{server.name}</p>
-                    <p className="text-gray-600">{server.ip}</p>
-                  </div>
+          <div className="space-y-4">
 
-                  <button
-                    onClick={async () => {
-                      await axios.post(
-                        `http://localhost:3001/api/replica-delete?server=${selectedServer.name}`,
-                        {
-                          target: server.name
-                        }
-                      );
+            {logs.map((log, index) => (
+              <div
+                key={index}
+                className="border p-4 rounded-xl"
+              >
 
-                      alert("Réplica eliminada");
-                      setCurrentView("replicas");
-                    }}
-                    className="bg-red-600 text-white px-4 py-2 rounded-xl"
-                  >
-                    Eliminar
-                  </button>
-                </div>
-              ))}
+                <p className="text-sm text-gray-500">
+                  {log.time}
+                </p>
+
+                <p className="font-bold">
+                  {log.server} → {log.action}
+                </p>
+
+                <pre className="text-sm bg-gray-100 p-2 rounded-xl overflow-auto">
+                  {log.output}
+                </pre>
+
+                {log.error && (
+                  <p className="text-red-600 font-bold">
+                    ERROR
+                  </p>
+                )}
+
+              </div>
+            ))}
+
           </div>
 
         </div>
@@ -755,18 +673,12 @@ if (currentView === "eliminarReplica") {
                 </h1>
 
                 <p className="text-gray-700">
-                  Servidor administrado con Ansible
+                  {selectedServer.ip}
                 </p>
 
               </div>
 
               <div className="flex items-center gap-3">
-
-                <div className="w-4 h-4 bg-green-500 rounded-full"></div>
-
-                <span className="font-semibold">
-                  ONLINE
-                </span>
 
               </div>
 
@@ -799,20 +711,9 @@ if (currentView === "eliminarReplica") {
               </p>
 
             </button>
-             
-            <button onClick={() => setCurrentView("replicas")} className="bg-white border border-gray-300 p-8 rounded-3xl shadow-lg text-left hover:scale-[1.02] transition">
-             <h2 className="text-2xl font-bold mb-3">
-               Réplicas
-             </h2>
 
-             <p className="text-gray-700">
-              Crear o eliminar replicación entre servidores
-             </p>
-           </button>
 
-           
-
-            <button className="bg-white border border-gray-300 p-8 rounded-3xl shadow-lg text-left hover:scale-[1.02] transition">
+            <button className="bg-white border border-gray-300 p-8 rounded-3xl shadow-lg text-left hover:scale-[1.02] transition" onClick={() => setCurrentView("estado")}>
 
               <h2 className="text-2xl font-bold mb-3">
                 Estado
@@ -826,7 +727,7 @@ if (currentView === "eliminarReplica") {
 
             <button className="bg-white border border-gray-300 p-8 rounded-3xl shadow-lg text-left hover:scale-[1.02] transition">
 
-              <h2 className="text-2xl font-bold mb-3">
+              <h2 className="text-2xl font-bold mb-3" onClick={() => setCurrentView("logs")}>
                 Logs
               </h2>
 
@@ -839,11 +740,11 @@ if (currentView === "eliminarReplica") {
             <button className="bg-white border border-gray-300 p-8 rounded-3xl shadow-lg text-left hover:scale-[1.02] transition" onClick={exponer}>
 
               <h2 className="text-2xl font-bold mb-3">
-                Exponer mariadb
+                Abrir mariadb
               </h2>
 
               <p className="text-gray-700">
-                Exponer el servicio de mariadb
+                Abrir el puerto de mariadb
               </p>
 
             </button>
@@ -871,7 +772,7 @@ if (currentView === "eliminarReplica") {
         <div className="bg-white border border-gray-300 rounded-3xl shadow-lg p-8 mb-8">
 
           <h1 className="text-4xl font-bold text-black mb-3">
-            Infraestructura
+            Lista de servidores
           </h1>
 
           <p className="text-gray-800">
@@ -906,8 +807,6 @@ if (currentView === "eliminarReplica") {
                   </p>
 
                 </div>
-
-                <div className="w-4 h-4 bg-green-500 rounded-full"></div>
 
               </div>
 

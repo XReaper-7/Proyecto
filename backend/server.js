@@ -1,6 +1,11 @@
 const express = require("express");
 const cors = require("cors");
 const { exec } = require("child_process");
+const net = require("net");
+let logs = [];
+const fs = require("fs");
+const path = require("path");
+const LOG_FILE = path.join(__dirname, "..", "logs", "logs.json");
 
 const app = express();
 
@@ -10,6 +15,14 @@ app.use(express.json());
 app.get("/", (req, res) => {
   res.send("Backend funcionando");
 });
+
+if (fs.existsSync(LOG_FILE)) {
+  try {
+    logs = JSON.parse(fs.readFileSync(LOG_FILE, "utf-8"));
+  } catch (e) {
+    logs = [];
+  }
+}
 
   /*
   |--------------------------------------------------------------------------
@@ -78,6 +91,8 @@ ansible-playbook \
 
   exec(cmd, (error, stdout, stderr) => {
   
+    addLog(server, "RESTORE", stdout || stderr, !!error);
+  
     if (error) {
       return res.status(500).json({
         success: false,
@@ -122,6 +137,8 @@ ansible-playbook \
 
   exec(cmd, (error, stdout, stderr) => {
 
+  addLog(server, "DELETE-BACKUP", stdout || stderr, !!error);
+
     if (error) {
       return res.status(500).json({
         success: false,
@@ -157,6 +174,8 @@ ansible-playbook -i ../ansible/hosts ../ansible/actualizar_intervalo.yml \
 
   exec(cmd, (err, stdout, stderr) => {
 
+  addLog(server, "BACKUP-UPDATE", stdout || stderr, !!err);
+
     if (err) {
       return res.status(500).json({
         error: stderr || err.message
@@ -169,84 +188,6 @@ ansible-playbook -i ../ansible/hosts ../ansible/actualizar_intervalo.yml \
     });
 
   });
-});
-
-  /*
-  |--------------------------------------------------------------------------
-  | CREAR REPLICA
-  |--------------------------------------------------------------------------
-  */
-
-app.post("/api/replica", (req, res) => {
-
-  const server = req.query.server;
-  const target = req.body.target;
-
-  console.log("SOURCE:", server);
-  console.log("TARGET:", target);
-
-  const cmd = `
-ansible-playbook -i ../ansible/hosts ../ansible/replica.yml \
---extra-vars '{"source":"${server}","target":"${target}"}'
-`;
-
-  console.log("CMD:", cmd);
-
-  exec(cmd, (error, stdout, stderr) => {
-
-    console.log("STDOUT:", stdout);
-    console.log("STDERR:", stderr);
-
-    if (error) {
-      console.log("ERROR:", error.message);
-
-      return res.status(500).json({
-        success: false,
-        error: stderr || error.message
-      });
-    }
-
-    res.json({
-      success: true,
-      output: stdout
-    });
-
-  });
-
-});
-
-  /*
-  |--------------------------------------------------------------------------
-  | BORRAR REPLICA
-  |--------------------------------------------------------------------------
-  */
-
-app.post("/api/replica-delete", (req, res) => {
-
-  const source = req.query.server;
-  const target = req.body.target;
-
-  const cmd = `
-ansible-playbook -i ../ansible/hosts ../ansible/replica_remove.yml \
---extra-vars "source=${source} target=${target}"
-`;
-
-  exec(cmd, (error, stdout, stderr) => {
-
-    if (error) {
-      return res.status(500).json({
-        success: false,
-        error: stderr || error.message
-      });
-    }
-
-    res.json({
-      success: true,
-      output: stdout
-    });
-
-  });
-
 });
 
   /*
@@ -356,6 +297,8 @@ app.post("/api/install", (req, res) => {
 
   (error, stdout, stderr) => {
 
+  addLog(server, "INSTALL", stdout || stderr, !!error);
+
     if (error) {
       return res.status(500).json({
         error: stderr
@@ -381,6 +324,8 @@ app.post("/api/delete", (req, res) => {
 
   (error, stdout, stderr) => {
 
+  addLog(server, "DELETE", stdout || stderr, !!error);
+
     if (error) {
       return res.status(500).json({
         error: stderr
@@ -398,3 +343,114 @@ app.post("/api/delete", (req, res) => {
 app.listen(3001, () => {
   console.log("Servidor iniciado en puerto 3001");
 });
+
+  /*
+  |--------------------------------------------------------------------------
+  | COMPROBAR ESTADO
+  |--------------------------------------------------------------------------
+  */
+
+function checkHost(ip) {
+  return new Promise((resolve) => {
+    exec(`ping -c 1 -W 1 ${ip}`, (error) => {
+      resolve(!error);
+    });
+  });
+}
+
+function checkPort(ip, port) {
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+
+    const timeout = 1000;
+
+    socket.setTimeout(timeout);
+
+    socket.on("connect", () => {
+      socket.destroy();
+      resolve(true);
+    });
+
+    socket.on("error", () => resolve(false));
+    socket.on("timeout", () => {
+      socket.destroy();
+      resolve(false);
+    });
+
+    socket.connect(port, ip);
+  });
+}
+
+app.get("/api/status", async (req, res) => {
+
+  const { server, ip } = req.query;
+
+  if (!ip) {
+    return res.status(400).json({
+      success: false,
+      error: "IP no proporcionada"
+    });
+  }
+
+  try {
+
+    const isUp = await checkHost(ip);
+    const portOpen = await checkPort(ip, 30306);
+
+    res.json({
+      success: true,
+      server,
+      ip,
+      status: {
+        online: isUp,
+        port_30306: portOpen
+      }
+    });
+
+  } catch (err) {
+
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
+
+  }
+
+});
+
+  /*
+  |--------------------------------------------------------------------------
+  | LOGS
+  |--------------------------------------------------------------------------
+  */
+  
+app.get("/api/logs", (req, res) => {
+  const server = req.query.server;
+
+  const filtered = server
+    ? logs.filter(l => l.server === server)
+    : logs;
+
+  res.json({
+    success: true,
+    logs: [...filtered].reverse()
+  });
+});
+
+function addLog(server, action, output, error = false) {
+  const logEntry = {
+    time: new Date().toISOString(),
+    server,
+    action,
+    output,
+    error
+  };
+
+  logs.push(logEntry);
+
+  if (logs.length > 200) {
+    logs.shift();
+  }
+
+  fs.writeFileSync(LOG_FILE, JSON.stringify(logs, null, 2));
+}
