@@ -12,6 +12,9 @@
         msg: "Debes indicar intervalo (ej: */5 * * * *)"
       when: interval == ""
 
-    - name: Actualizar cron de backups
+    - name: Cambiar intervalo del CronJob
       shell: |
-        (crontab -l 2>/dev/null | grep -v backup-mariadb; echo "{{ interval }} /home/usuario/scripts/backup.sh") | crontab -
+        kubectl patch cronjob mariadb-backup \
+          -p '{"spec":{"schedule":"{{ interval }}"}}'
+      environment:
+        KUBECONFIG: "/home/usuario/.kube/config"

@@ -91,6 +91,8 @@ ansible-playbook \
 
   exec(cmd, (error, stdout, stderr) => {
   
+	console.log(stdout);
+  
     addLog(server, "RESTORE", stdout || stderr, !!error);
   
     if (error) {
@@ -136,6 +138,8 @@ ansible-playbook \
 `;
 
   exec(cmd, (error, stdout, stderr) => {
+  
+	console.log(stdout);
 
   addLog(server, "DELETE-BACKUP", stdout || stderr, !!error);
 
@@ -173,6 +177,8 @@ ansible-playbook -i ../ansible/hosts ../ansible/actualizar_intervalo.yml \
 `;
 
   exec(cmd, (err, stdout, stderr) => {
+  
+	console.log(stdout);
 
   addLog(server, "BACKUP-UPDATE", stdout || stderr, !!err);
 
@@ -297,6 +303,8 @@ app.post("/api/install", (req, res) => {
 
   (error, stdout, stderr) => {
 
+	console.log(stdout);
+
   addLog(server, "INSTALL", stdout || stderr, !!error);
 
     if (error) {
@@ -323,6 +331,8 @@ app.post("/api/delete", (req, res) => {
   `,
 
   (error, stdout, stderr) => {
+
+	console.log(stdout);
 
   addLog(server, "DELETE", stdout || stderr, !!error);
 
@@ -395,7 +405,7 @@ app.get("/api/status", async (req, res) => {
   try {
 
     const isUp = await checkHost(ip);
-    const portOpen = await checkPort(ip, 30306);
+    const portOpen = await checkPort(ip, 3306);
 
     res.json({
       success: true,
@@ -403,7 +413,7 @@ app.get("/api/status", async (req, res) => {
       ip,
       status: {
         online: isUp,
-        port_30306: portOpen
+        port_3306: portOpen
       }
     });
 

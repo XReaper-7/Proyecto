@@ -1,0 +1,100 @@
+---
+- name: Configurar Minikube Tunnel automático
+  hosts: servidores
+  become: yes
+
+  tasks:
+
+    # =========================================================
+    # CREAR SERVICIO LOADBALANCER
+    # =========================================================
+
+    - name: Exponer MariaDB como LoadBalancer
+      become: no
+      shell: |
+        kubectl apply -f - <<EOF
+        apiVersion: v1
+        kind: Service
+
+        metadata:
+          name: mariadb-service
+
+        spec:
+          type: LoadBalancer
+
+          selector:
+            app: mariadb
+
+          ports:
+            - port: 3306
+              targetPort: 3306
+        EOF
+      environment:
+        KUBECONFIG: "/home/{{ ansible_user }}/.kube/config"
+
+    # =========================================================
+    # CREAR SERVICIO SYSTEMD
+    # =========================================================
+
+    - name: Crear servicio minikube-tunnel
+      copy:
+        dest: /etc/systemd/system/minikube-tunnel.service
+        content: |
+          [Unit]
+          Description=Minikube Tunnel
+          After=minikube.service
+          Requires=minikube.service
+
+          [Service]
+          Type=simple
+          User=root
+          Environment="HOME=/home/{{ ansible_user }}"
+          Environment="KUBECONFIG=/home/{{ ansible_user }}/.kube/config"
+
+          ExecStart=/usr/local/bin/minikube tunnel
+
+          Restart=always
+          RestartSec=5
+
+          [Install]
+          WantedBy=multi-user.target
+
+    # =========================================================
+    # RECARGAR SYSTEMD
+    # =========================================================
+
+    - name: Recargar systemd
+      systemd:
+        daemon_reload: yes
+
+    # =========================================================
+    # ACTIVAR SERVICIO
+    # =========================================================
+
+    - name: Activar minikube-tunnel
+      systemd:
+        name: minikube-tunnel
+        enabled: yes
+        state: restarted
+
+    # =========================================================
+    # ESPERAR IP EXTERNA
+    # =========================================================
+
+    - name: Esperar external IP
+      become: no
+      shell: kubectl get svc mariadb-service
+      register: svc_result
+      retries: 10
+      delay: 5
+      until: "'<pending>' not in svc_result.stdout"
+      environment:
+        KUBECONFIG: "/home/{{ ansible_user }}/.kube/config"
+
+    # =========================================================
+    # MOSTRAR SERVICIO
+    # =========================================================
+
+    - name: Mostrar servicio
+      debug:
+        var: svc_result.stdout

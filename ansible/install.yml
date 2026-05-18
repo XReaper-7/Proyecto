@@ -61,6 +61,7 @@
     
     - name: Reset conexión SSH para aplicar grupo docker
       meta: reset_connection
+
     # =========================================================
     # INSTALAR MINIKUBE
     # =========================================================
@@ -71,16 +72,6 @@
         install minikube-linux-amd64 /usr/local/bin/minikube
       args:
         creates: /usr/local/bin/minikube
-
-    # =========================================================
-    # CREAR CARPETA BACKUPS
-    # =========================================================
-
-#    - name: Crear carpeta de backups
-#      file:
-#        path: /home/{{ ansible_user }}/mariadb-backups
-#        state: directory
-#        mode: '0755'
 
     # =========================================================
     # INICIAR MINIKUBE
@@ -101,14 +92,6 @@
       retries: 10
       delay: 5
       until: k8s_result.rc == 0
-      
-    # =========================================================
-    # MOSTRAR NODOS
-    # =========================================================
-
-    - name: Mostrar nodos
-      debug:
-        var: k8s_result.stdout
 
     # =========================================================
     # CREAR SECRET MARIADB
@@ -172,27 +155,6 @@
                 hostPath:
                   path: /home/{{ ansible_user }}/mariadb-backups
                   type: DirectoryOrCreate
-        EOF
-
-    # =========================================================
-    # CREAR SERVICE
-    # =========================================================
-
-    - name: Crear service MariaDB
-      become: no
-      shell: |
-        kubectl apply -f - <<EOF
-        apiVersion: v1
-        kind: Service
-        metadata:
-          name: mariadb-service
-        spec:
-          selector:
-            app: mariadb
-          ports:
-            - port: 3306
-              targetPort: 3306
-          type: ClusterIP
         EOF
 
     # =========================================================
@@ -277,53 +239,168 @@
         KUBECONFIG: "/home/usuario/.kube/config"
         
     # =========================================================
-    # MOSTRAR CRONJOB
+    # CREAR SERVICIO SYSTEMD
     # =========================================================
 
-    - name: Mostrar CronJob
-      become: no
-      shell: kubectl get cronjob mariadb-backup
+    - name: Crear servicio systemd de Minikube
+      copy:
+        dest: /etc/systemd/system/minikube.service
+        content: |
+          [Unit]
+          Description=Minikube Kubernetes
+          After=docker.service network-online.target
+          Requires=docker.service
+
+          [Service]
+          Type=oneshot
+          User={{ ansible_user }}
+
+          Environment="HOME=/home/{{ ansible_user }}"
+          Environment="KUBECONFIG=/home/{{ ansible_user }}/.kube/config"
+
+          ExecStart=/usr/local/bin/minikube start --driver=docker
+          ExecStop=/usr/local/bin/minikube stop
+
+          RemainAfterExit=yes
+
+          [Install]
+          WantedBy=multi-user.target
 
     # =========================================================
-    # MOSTRAR PODS
+    # CREAR SERVICIO LOADBALANCER
     # =========================================================
 
-    - name: Mostrar pods activos
-      become: no
-      shell: kubectl get pods
-
-    # =========================================================
-    # MOSTRAR SERVICIOS
-    # =========================================================
-
-    - name: Mostrar servicios
-      become: no
-      shell: kubectl get svc
-
-    # =========================================================
-    # EXPONER MARIADB (NODEPORT)
-    # =========================================================
-
-    - name: Exponer MariaDB como NodePort
+    - name: Exponer MariaDB como LoadBalancer
       become: no
       shell: |
         kubectl apply -f - <<EOF
         apiVersion: v1
         kind: Service
+
         metadata:
           name: mariadb-service
+
         spec:
-          type: NodePort
+          type: LoadBalancer
+
           selector:
             app: mariadb
+
           ports:
-            - name: mysql
-              port: 3306
+            - port: 3306
               targetPort: 3306
-              nodePort: 30306
         EOF
       environment:
-        KUBECONFIG: "/home/usuario/.kube/config"
+        KUBECONFIG: "/home/{{ ansible_user }}/.kube/config"
+
+    # =========================================================
+    # CREAR SERVICIO MINIKUBE-TUNEL
+    # =========================================================
+
+    - name: Crear servicio minikube-tunnel
+      copy:
+        dest: /etc/systemd/system/minikube-tunnel.service
+        content: |
+          [Unit]
+          Description=Minikube Tunnel
+          After=minikube.service
+          Requires=minikube.service
+
+          [Service]
+          Type=simple
+          User=root
+          Environment="HOME=/home/{{ ansible_user }}"
+          Environment="KUBECONFIG=/home/{{ ansible_user }}/.kube/config"
+
+          ExecStart=/usr/local/bin/minikube tunnel
+
+          Restart=always
+          RestartSec=5
+
+          [Install]
+          WantedBy=multi-user.target
+
+    # =========================================================
+    # CREAR SERVICIO PORT-FORDWARD
+    # =========================================================
+
+    - name: Crear servicio systemd para MariaDB port-forward
+      copy:
+        dest: /etc/systemd/system/mariadb-portforward.service
+        content: |
+          [Unit]
+          Description=MariaDB Kubernetes Port Forward
+          After=minikube.service
+          Requires=minikube.service
+
+          [Service]
+          Type=simple
+          User={{ ansible_user }}
+
+          Environment="KUBECONFIG=/home/{{ ansible_user }}/.kube/config"
+
+          ExecStartPre=/bin/bash -c 'until kubectl get nodes; do sleep 2; done'
+
+          ExecStart=/usr/local/bin/kubectl port-forward svc/mariadb-service 3306:3306 --address 0.0.0.0
+
+          Restart=always
+          RestartSec=5
+
+          StandardOutput=journal
+          StandardError=journal
+
+          [Install]
+          WantedBy=multi-user.target
+
+    # =========================================================
+    # RECARGAR SYSTEMD
+    # =========================================================
+
+    - name: Recargar systemd
+      systemd:
+        daemon_reload: yes
+
+    # =========================================================
+    # ACTIVAR MINIKUBE
+    # =========================================================
+
+    - name: Activar servicio Minikube
+      systemd:
+        name: minikube
+        enabled: yes
+        state: started
+
+    # =========================================================
+    # ESPERAR KUBERNETES
+    # =========================================================
+
+    - name: Esperar a que Kubernetes esté listo
+      become: no
+      shell: kubectl get nodes
+      register: k8s_result
+      retries: 10
+      delay: 5
+      until: k8s_result.rc == 0
+
+    # =========================================================
+    # ACTIVAR SERVICIO
+    # =========================================================
+
+    - name: Activar minikube-tunnel
+      systemd:
+        name: minikube-tunnel
+        enabled: yes
+        state: restarted
+
+    # =========================================================
+    # ACTIVAR SERVICIO
+    # =========================================================
+
+    - name: Activar minikube-tunnel
+      systemd:
+        name: mariadb-portforward
+        enabled: yes
+        state: restarted
 
     # =========================================================
     # FINAL

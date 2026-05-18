@@ -220,7 +220,7 @@ const exponer = async () => {
 
     console.log(res.data);
 
-    alert(`Se ha abierto el servidor: ip ${selectedServer.ip} puerto 30306`);
+    alert(`Se ha abierto el servidor: ip ${selectedServer.ip} puerto 3306`);
 
   } catch (err) {
 
@@ -567,8 +567,8 @@ if (currentView === "estado") {
     </p>
 
     <p>
-      Puerto 30306:{" "}
-      {serverStatus?.status?.port_30306 ? "🟢 ABIERTO" : "🔴 CERRADO"}
+      Puerto 3306:{" "}
+      {serverStatus?.status?.port_3306 ? "🟢 ABIERTO" : "🔴 CERRADO"}
     </p>
   </div>
 )}
